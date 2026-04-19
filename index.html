@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatBox — Cross-repo commit graph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf7f2;
+    --bg-grid: rgba(28, 23, 20, 0.04);
+    --surface: #ffffff;
+    --surface-warm: #fcf9f4;
+    --ink: #1c1714;
+    --ink-dim: #58504a;
+    --ink-faint: #8a8078;
+    --hairline: rgba(28, 23, 20, 0.1);
+    --hairline-strong: rgba(28, 23, 20, 0.2);
+
+    /* Author-coloured dots — SourceTree style */
+    --auth-shravan: #c2410c;   /* terracotta */
+    --auth-bradley: #0891b2;   /* teal */
+    --auth-denis:   #7c2d12;   /* dark rust */
+    --auth-owen:    #6d28d9;   /* plum */
+    --auth-maikel:  #ca8a04;   /* mustard */
+    --auth-eden:    #4338ca;   /* indigo-navy */
+    --auth-sven:    #0f766e;   /* pine */
+    --auth-sean:    #9f1239;   /* wine */
+    --auth-gab:     #64748b;   /* slate */
+    --auth-a0:      #166534;   /* forest */
+
+    /* Repo lane tints */
+    --lane-fw:     rgba(8, 145, 178, 0.06);
+    --lane-and:    rgba(159, 18, 57, 0.06);
+    --lane-hw:     rgba(101, 163, 13, 0.06);
+    --lane-misc:   rgba(100, 116, 139, 0.06);
+
+    /* Pair gold */
+    --gold: #b45309;
+    --gold-bright: #d97706;
+    --gold-tint: #fef3c7;
+
+    --font-serif: 'IBM Plex Serif', Georgia, serif;
+    --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-image:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    padding: 40px 28px 64px;
+  }
+  .wrap { max-width: 2000px; margin: 0 auto; }
+
+  header.doc {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 24px;
+    border-bottom: 1px solid var(--hairline-strong);
+    padding-bottom: 20px;
+    margin-bottom: 28px;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  h1 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: 34px;
+    line-height: 1.1;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  h1 em { font-style: italic; color: var(--gold); font-weight: 500; }
+  .doc-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--ink-faint);
+    text-align: right;
+  }
+  .doc-meta strong { color: var(--ink-dim); font-weight: 500; }
+
+  .lead {
+    font-family: var(--font-serif);
+    font-size: 18px;
+    line-height: 1.5;
+    color: var(--ink);
+    max-width: 1100px;
+    margin: 0 0 32px;
+  }
+  .lead em { font-style: normal; color: var(--gold); border-bottom: 1px solid var(--gold); padding-bottom: 1px; }
+
+  /* ========= Graph panel ========= */
+  .graph-panel {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    padding: 8px;
+    overflow-x: auto;
+    margin-bottom: 32px;
+    box-shadow: 0 1px 2px rgba(28, 23, 20, 0.03);
+  }
+  svg.graph {
+    display: block;
+    width: 100%;
+    min-width: 1900px;
+    height: auto;
+  }
+
+  /* ========= Legend ========= */
+  .legend-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 40px;
+  }
+  .legend {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    padding: 16px 20px;
+  }
+  .legend h3 {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 10px;
+    font-weight: 600;
+  }
+  .legend-row {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--ink-dim);
+  }
+  .legend-row span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid rgba(28,23,20,0.25); }
+  .sw-pill { display: inline-block; padding: 1px 8px; border-radius: 10px; border: 1px solid currentColor; font-size: 10px; font-weight: 600; }
+
+  /* ========= Pair cards ========= */
+  .pair-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 18px;
+    margin-bottom: 40px;
+  }
+  .pair-card {
+    background: var(--surface);
+    border: 1px solid var(--hairline-strong);
+    border-left: 4px solid var(--gold);
+    padding: 18px 22px;
+    position: relative;
+  }
+  .pair-card.verified { border-left-color: #4d7c0f; }
+  .pair-card.wip { border-left-color: #b45309; }
+  .pair-card__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .pair-name {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .pair-status {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+  .pair-status.ok  { background: #ecfccb; color: #4d7c0f; }
+  .pair-status.wip { background: var(--gold-tint); color: var(--gold); }
+  .pair-card table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+  }
+  .pair-card td {
+    padding: 4px 0;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    vertical-align: top;
+    color: var(--ink);
+  }
+  .pair-card td.k {
+    color: var(--ink-faint);
+    width: 90px;
+    font-weight: 500;
+    padding-right: 12px;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    padding-top: 6px;
+  }
+  .pair-card td.v { font-size: 12px; }
+  .pair-card td.v code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: rgba(28,23,20,0.05);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  /* ========= Read-more section ========= */
+  .refs {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    padding: 18px 22px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-dim);
+  }
+  .refs h3 {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    margin: 0 0 10px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .refs code {
+    background: rgba(28,23,20,0.05);
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-size: 11.5px;
+  }
+  .refs ul { margin: 6px 0 0; padding-left: 18px; }
+  .refs li { margin-bottom: 4px; line-height: 1.55; }
+
+  /* ========= SVG text styles ========= */
+  .year-tick   { stroke: var(--hairline); stroke-width: 1; }
+  .year-label  { font-family: var(--font-mono); font-size: 11px; fill: var(--ink-faint); letter-spacing: 0.08em; text-anchor: middle; }
+  .lane-title  { font-family: var(--font-mono); font-size: 12px; font-weight: 700; fill: var(--ink); letter-spacing: 0.08em; text-transform: uppercase; }
+  .lane-sub    { font-family: var(--font-mono); font-size: 9.5px; fill: var(--ink-faint); letter-spacing: 0.04em; }
+  .branch-pill-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 600;
+    fill: var(--ink);
+  }
+  .tag-pill-label {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    fill: var(--gold);
+    letter-spacing: 0.02em;
+  }
+  .commit-date { font-family: var(--font-mono); font-size: 8.5px; fill: var(--ink-faint); letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="doc">
+    <div>
+      <div class="eyebrow">WhatBox · Cross-repo Timeline</div>
+      <h1>All repos, all branches, the <em>pair/*</em> tags drawn between them</h1>
+    </div>
+    <div class="doc-meta">
+      <div><strong>Generated</strong> · 2026-04-20</div>
+      <div><strong>Span</strong> · 2016-07 → 2026-04</div>
+      <div><strong>Repos</strong> · 7 &middot; Branches · 45+</div>
+    </div>
+  </header>
+
+  <p class="lead">
+    One <em>SourceTree-style commit graph</em> across every WhatBox repository. Each horizontal lane is one repo.
+    Coloured dots mark commits (colour = author). Pill badges mark branches and tags. The <em>gold dashed lines
+    that jump between lanes</em> are the <code style="font-family:var(--font-mono);font-size:15px;color:var(--gold);background:var(--gold-tint);padding:0 6px;">pair/*</code>
+    tags — they tell you which firmware commit was verified working with which Android commit.
+  </p>
+
+  <!-- =========================== GRAPH =========================== -->
+  <div class="graph-panel">
+    <svg class="graph" viewBox="0 0 2000 780" preserveAspectRatio="xMinYMin meet" xmlns="http://www.w3.org/2000/svg">
+      <!--
+        Time range: 2016-07-01 → 2026-05-01 = 118 months
+        x-origin: 220 (lane labels to the left)
+        x-extent: 1760 (1980 − 220)
+        px/month: 1760 / 118 ≈ 14.92
+        Helper: x(year, month) = 220 + ((year-2016)*12 + (month-7)) * 14.92
+      -->
+
+      <!-- ==== LANE BACKGROUND BANDS ==== -->
+      <!-- Lane 1: FIRMWARE · y 60..260 -->
+      <rect x="0"   y="60"  width="2000" height="200" fill="var(--lane-fw)"/>
+      <!-- Lane 2: ANDROID · y 280..460 -->
+      <rect x="0"   y="280" width="2000" height="180" fill="var(--lane-and)"/>
+      <!-- Lane 3: HARDWARE / PCB · y 480..580 -->
+      <rect x="0"   y="480" width="2000" height="100" fill="var(--lane-hw)"/>
+      <!-- Lane 4: BRIDGE / MCU / TOOLS · y 600..700 -->
+      <rect x="0"   y="600" width="2000" height="100" fill="var(--lane-misc)"/>
+
+      <!-- label-column white strip -->
+      <rect x="0" y="30" width="220" height="700" fill="rgba(252,249,244,0.9)"/>
+      <line x1="220" y1="30" x2="220" y2="730" stroke="var(--hairline-strong)" stroke-width="1"/>
+
+      <!-- ==== YEAR RULER (top) ==== -->
+      <g>
+        <line x1="220" y1="35" x2="1980" y2="35" stroke="var(--hairline-strong)" stroke-width="1"/>
+        <!-- 2016-07 → x=220, monthly tick every 12 months = 179 px -->
+        <!-- year = 2016+n, month 1 → x = 220 + ((n*12)+(1-7))*14.92 = 220 + (12n−6)*14.92 -->
+        <!-- Jan of each year: -->
+        <!-- 2017 Jan: 220 + 6*14.92 = 220 + 89.5 = 309.5 -->
+        <g class="years">
+          <line x1="309.5"  y1="30" x2="309.5"  y2="730" class="year-tick"/>
+          <text x="309.5"  y="22" class="year-label">2017</text>
+          <line x1="488.5"  y1="30" x2="488.5"  y2="730" class="year-tick"/>
+          <text x="488.5"  y="22" class="year-label">2018</text>
+          <line x1="667.5"  y1="30" x2="667.5"  y2="730" class="year-tick"/>
+          <text x="667.5"  y="22" class="year-label">2019</text>
+          <line x1="846.5"  y1="30" x2="846.5"  y2="730" class="year-tick"/>
+          <text x="846.5"  y="22" class="year-label">2020</text>
+          <line x1="1025.5" y1="30" x2="1025.5" y2="730" class="year-tick"/>
+          <text x="1025.5" y="22" class="year-label">2021</text>
+          <line x1="1204.5" y1="30" x2="1204.5" y2="730" class="year-tick"/>
+          <text x="1204.5" y="22" class="year-label">2022</text>
+          <line x1="1383.5" y1="30" x2="1383.5" y2="730" class="year-tick"/>
+          <text x="1383.5" y="22" class="year-label">2023</text>
+          <line x1="1562.5" y1="30" x2="1562.5" y2="730" class="year-tick"/>
+          <text x="1562.5" y="22" class="year-label">2024</text>
+          <line x1="1741.5" y1="30" x2="1741.5" y2="730" class="year-tick"/>
+          <text x="1741.5" y="22" class="year-label">2025</text>
+          <line x1="1920.5" y1="30" x2="1920.5" y2="730" class="year-tick"/>
+          <text x="1920.5" y="22" class="year-label">2026</text>
+        </g>
+      </g>
+
+      <!-- ==== LANE LABELS ==== -->
+      <g>
+        <text x="20" y="95"  class="lane-title">FIRMWARE</text>
+        <text x="20" y="110" class="lane-sub">v2.0 · v4.0 · v4.1</text>
+        <text x="20" y="122" class="lane-sub">(29 branches on v4.1)</text>
+
+        <text x="20" y="320" class="lane-title">ANDROID</text>
+        <text x="20" y="335" class="lane-sub">remote-control app</text>
+        <text x="20" y="347" class="lane-sub">(15 branches)</text>
+
+        <text x="20" y="515" class="lane-title">HARDWARE</text>
+        <text x="20" y="530" class="lane-sub">PCB &middot; mechanical</text>
+
+        <text x="20" y="635" class="lane-title">BRIDGE / MCU</text>
+        <text x="20" y="650" class="lane-sub">EspBlueTooth &middot; mcutestapp</text>
+      </g>
+
+      <!-- ==== FIRMWARE SUB-ROWS ==== -->
+      <!-- v2.0 @ y=80 (single dot, 2016-07-21) -->
+      <!-- v4.0 @ y=120 (2017-01-17 → 2017-02-12) -->
+      <!-- v4.1 @ y=160..240 (many branches) -->
+      <g stroke="var(--hairline)" stroke-width="1" stroke-dasharray="2 4">
+        <line x1="220" y1="100" x2="1980" y2="100"/>
+        <line x1="220" y1="140" x2="1980" y2="140"/>
+      </g>
+      <text x="226" y="82"  class="lane-sub" style="font-size:9.5px">v2.0 (xmega)</text>
+      <text x="226" y="122" class="lane-sub" style="font-size:9.5px">v4.0 (SAM E70 · 2017 port)</text>
+      <text x="226" y="162" class="lane-sub" style="font-size:9.5px">v4.1 (SAM E70 · 29 branches)</text>
+
+      <!-- === FIRMWARE v2.0: single commit range 2016-05 to 2016-07 === -->
+      <!-- 2016-05-08 → x=220 + (-2)*14.92 = 190.2 (before lane); use 2016-07-21 → x=220+0.67*14.92 = 230 -->
+      <rect x="200" y="74" width="45" height="12" fill="#b45309" opacity="0.65" rx="2"/>
+      <circle cx="230" cy="80" r="4" fill="var(--auth-gab)" stroke="#fff" stroke-width="1.5"/>
+      <text x="248" y="78" class="branch-pill-label" style="font-size:9px">v2.0 · 83 commits · xmega128</text>
+
+      <!-- === FIRMWARE v4.0: 2017-01-17 → 2017-02-12 === -->
+      <!-- Jan 17 2017: 220 + 6.5*14.92 = 317; Feb 12: 220 + 7.4*14.92 = 330 -->
+      <rect x="317" y="114" width="16" height="12" fill="#0891b2" opacity="0.7" rx="2"/>
+      <circle cx="317" cy="120" r="4" fill="var(--auth-gab)" stroke="#fff" stroke-width="1.5"/>
+      <circle cx="333" cy="120" r="4" fill="var(--auth-gab)" stroke="#fff" stroke-width="1.5"/>
+      <text x="342" y="118" class="branch-pill-label" style="font-size:9px">v4.0 · 17 commits · ARM port</text>
+
+      <!-- ====================================================== -->
+      <!-- === FIRMWARE v4.1: all branches plotted as dots     === -->
+      <!-- ====================================================== -->
+      <!-- Branch trunk line from first commit to today -->
+      <line x1="478" y1="200" x2="1960" y2="200" stroke="#0891b2" stroke-width="2" opacity="0.35"/>
+
+      <!-- 2018-01-31 maxon_motion_control (eden) — x = 220 + ((2*12)+(1-7))*14.92 = 220 + 18*14.92 = 488.5 -->
+      <circle cx="488" cy="170" r="4" fill="var(--auth-eden)" stroke="#fff" stroke-width="1.5"/>
+      <text x="488" y="156" class="commit-date" text-anchor="middle">2018-01</text>
+      <text x="488" y="144" class="branch-pill-label" text-anchor="middle">feature/maxon</text>
+
+      <!-- 2018-02-18 SeanTrial — x = 220 + 19.6*14.92 = 512 -->
+      <circle cx="512" cy="195" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="512" y="185" class="branch-pill-label" text-anchor="middle">SeanTrial</text>
+
+      <!-- 2018-10-20 EXTRA_REF — x = 220 + 27.67*14.92 = 632 -->
+      <circle cx="632" cy="170" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="632" y="156" class="branch-pill-label" text-anchor="middle">feature/EXTRA_REF</text>
+      <text x="632" y="144" class="commit-date" text-anchor="middle">2018-10</text>
+
+      <!-- 2019-01-10 owen-dynamicbrake — x = 220 + 30.33*14.92 = 672.6 -->
+      <circle cx="673" cy="215" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="673" y="230" class="branch-pill-label" text-anchor="middle">owen-dynamicbrake-fix</text>
+
+      <!-- 2019-03-17 dynamixbrake-fix — x = 220 + 32.57*14.92 = 706 -->
+      <circle cx="706" cy="185" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="706" y="172" class="branch-pill-label" text-anchor="middle">dynamixbrake-fix</text>
+
+      <!-- 2019-06-15 shravan/test_SPI2 — x = 220 + 35.5*14.92 = 750 -->
+      <circle cx="750" cy="225" r="5" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="750" y="245" class="branch-pill-label" text-anchor="middle" fill="#7c2d12">shravan / test_SPI / test_SPI2</text>
+      <text x="750" y="257" class="commit-date" text-anchor="middle">NOT Shravan's — Denis handoff</text>
+
+      <!-- 2019-12-25 Implement_I2C / test_SPI (maikel) — x = 220 + 41.83*14.92 = 844.3 -->
+      <circle cx="844" cy="170" r="4" fill="var(--auth-maikel)" stroke="#fff" stroke-width="1.5"/>
+      <text x="844" y="156" class="branch-pill-label" text-anchor="middle">Implement_I2C · test_SPI · maikel4/5</text>
+      <text x="844" y="144" class="commit-date" text-anchor="middle">2019-12 (Maikel)</text>
+
+      <!-- 2020-02-02 I2C_DIODE_2020 — x = 220 + 43.03*14.92 = 862.4 -->
+      <circle cx="862" cy="195" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="862" y="210" class="branch-pill-label" text-anchor="middle" style="font-size:9px">I2C_DIODE_2020</text>
+
+      <!-- 2020-12-16 mc-refactor (SHRAVAN — gold!) — x = 220 + 53.5*14.92 = 1018 -->
+      <circle cx="1018" cy="200" r="8" fill="var(--auth-shravan)" stroke="var(--gold)" stroke-width="3"/>
+      <rect x="940" y="216" width="156" height="16" fill="var(--gold-tint)" stroke="var(--gold)" stroke-width="1.5" rx="3"/>
+      <text x="1018" y="227" class="tag-pill-label" text-anchor="middle">★ mc-refactor (Shravan)</text>
+      <text x="1018" y="186" class="commit-date" text-anchor="middle" fill="var(--gold)" font-weight="700">2020-12-16 · 40 commits · CASCADED PID</text>
+
+      <!-- 2020-12-31 follower (Shravan) — x ≈ 1025 -->
+      <circle cx="1025" cy="175" r="4" fill="var(--auth-shravan)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1025" y="165" class="branch-pill-label" text-anchor="middle" style="font-size:9px">follower</text>
+
+      <!-- 2021-01-15 main-cleanup/dev/lookahead — x = 220 + 54.46*14.92 = 1032.7 -->
+      <circle cx="1040" cy="250" r="4" fill="var(--auth-shravan)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1040" y="265" class="branch-pill-label" text-anchor="middle" style="font-size:9px">main-cleanup · dev · lookahead</text>
+
+      <!-- 2021-01-27 hotFix (Bradley) — x = 220 + 54.87*14.92 = 1038.7 -->
+      <circle cx="1055" cy="170" r="4" fill="var(--auth-bradley)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1055" y="158" class="branch-pill-label" text-anchor="middle">hotFix (Bradley)</text>
+
+      <!-- 2021-03-02 vescTesting — x = 220 + 55.97*14.92 = 1055 -->
+      <circle cx="1075" cy="195" r="4" fill="var(--auth-bradley)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1075" y="183" class="branch-pill-label" text-anchor="middle">vescTesting</text>
+
+      <!-- 2021-04-10 referencePointsFix — x = 220 + 57.33*14.92 = 1075 -->
+      <circle cx="1090" cy="230" r="4" fill="var(--auth-shravan)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1090" y="245" class="branch-pill-label" text-anchor="middle" style="font-size:9px">referencePointsFix</text>
+
+      <!-- 2022-02-23 Stairmaster(lowercase) / v2-alpha (Sven) — x = 220 + 67.77*14.92 = 1231 -->
+      <circle cx="1231" cy="170" r="5" fill="var(--auth-sven)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1231" y="156" class="branch-pill-label" text-anchor="middle">Stairmaster · v2-alpha</text>
+      <text x="1231" y="144" class="commit-date" text-anchor="middle">2022-02 (Sven takeover)</text>
+
+      <!-- 2022-09-28 master HEAD — x = 220 + 74.87*14.92 = 1337.3 -->
+      <circle cx="1337" cy="200" r="7" fill="var(--auth-shravan)" stroke="#fff" stroke-width="2"/>
+      <rect x="1290" y="216" width="94" height="16" fill="#fff" stroke="var(--ink-dim)" stroke-width="1" rx="3"/>
+      <text x="1337" y="227" class="branch-pill-label" text-anchor="middle">master · HEAD</text>
+      <text x="1337" y="186" class="commit-date" text-anchor="middle">2022-09-28 · tainted by &lt;Shravan Lal&gt; email</text>
+
+      <!-- v4.2e tag — pin at master HEAD or later? It's the release tag. Place at x 1337 as well -->
+      <rect x="1385" y="210" width="48" height="16" fill="var(--gold-tint)" stroke="var(--gold)" stroke-width="1.5" rx="3"/>
+      <text x="1409" y="221" class="tag-pill-label" text-anchor="middle" style="font-size:10px">v4.2e</text>
+
+      <!-- v4.1d tag (before v4.2e) -->
+      <rect x="1235" y="180" width="40" height="14" fill="#fee2e2" stroke="#b91c1c" stroke-width="1" rx="3"/>
+      <text x="1255" y="190" class="tag-pill-label" text-anchor="middle" fill="#b91c1c" style="font-size:9px">v4.1d ⚠</text>
+
+      <!-- v4.1c / V4.1b tags -->
+      <rect x="1180" y="220" width="62" height="14" fill="var(--gold-tint)" stroke="var(--gold)" stroke-width="1" rx="3"/>
+      <text x="1211" y="230" class="tag-pill-label" text-anchor="middle" style="font-size:9px">V4.1b · v4.1c</text>
+
+      <!-- 2022-12-14 Gcode (Sven) — x = 220 + 77.4*14.92 = 1374.8 -->
+      <circle cx="1375" cy="170" r="5" fill="var(--auth-sven)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1375" y="156" class="branch-pill-label" text-anchor="middle">Gcode (+H +J +Q +X)</text>
+
+      <!-- 2022-12-21 overflowDebugging — x ~ 1378 -->
+      <circle cx="1385" cy="250" r="4" fill="var(--auth-sven)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1385" y="265" class="branch-pill-label" text-anchor="middle" style="font-size:9px">overflowDebugging</text>
+
+      <!-- 2024-04-03 brad-bridgePortTesting (Sven) — x = 220 + 92.07*14.92 = 1593.7 -->
+      <circle cx="1594" cy="200" r="4" fill="var(--auth-sven)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1594" y="186" class="branch-pill-label" text-anchor="middle">brad-bridgePortTesting</text>
+
+      <!-- 2026-04-05 build-output-stairmaster (a0-agent) — x = 220 + 116.13*14.92 = 1953.3 -->
+      <circle cx="1953" cy="200" r="5" fill="var(--auth-a0)" stroke="#fff" stroke-width="2"/>
+      <text x="1953" y="186" class="branch-pill-label" text-anchor="end">build-output-stairmaster</text>
+      <text x="1953" y="174" class="commit-date" text-anchor="end">2026-04-05 (a0-agent@lab)</text>
+
+      <!-- ====================================================== -->
+      <!-- === ANDROID LANE                                     == -->
+      <!-- ====================================================== -->
+      <line x1="808" y1="360" x2="1990" y2="360" stroke="#9f1239" stroke-width="2" opacity="0.35"/>
+
+      <!-- 2019-11-24 DOVETAIL_SQUARE — x = 220 + 40.7*14.92 = 827.2 -->
+      <circle cx="827" cy="340" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="827" y="330" class="branch-pill-label" text-anchor="middle">FEATURE-DOVETAIL</text>
+
+      <!-- 2020-03-15 VICES — x = 220 + 44.37*14.92 = 882 -->
+      <circle cx="882" cy="375" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="882" y="390" class="branch-pill-label" text-anchor="middle">FEATURE-VICES</text>
+
+      <!-- 2020-08-02 libgdx — x = 220 + 49*14.92 = 951 -->
+      <circle cx="951" cy="340" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="951" y="330" class="branch-pill-label" text-anchor="middle">ENH-libgdx</text>
+
+      <!-- 2020-12-06 ARCHITECTURE_COMPONENTS — x = 220 + 53.17*14.92 = 1013 -->
+      <circle cx="1013" cy="375" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1013" y="390" class="branch-pill-label" text-anchor="middle">ENH-ARCH_COMPONENTS</text>
+
+      <!-- 2021-03-07 android-master · EEPROMReader — x = 220 + 56.2*14.92 = 1058.5 -->
+      <circle cx="1059" cy="340" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1059" y="330" class="branch-pill-label" text-anchor="middle">android-master · EEPROMReader</text>
+
+      <!-- 2021-04-10 dev — x = 220 + 57.33*14.92 = 1075 -->
+      <circle cx="1075" cy="420" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1075" y="435" class="branch-pill-label" text-anchor="middle">dev</text>
+
+      <!-- 2021-05-26 FEATURE-ReferencePoints — x = 220 + 58.87*14.92 = 1098 -->
+      <circle cx="1098" cy="375" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1098" y="390" class="branch-pill-label" text-anchor="middle">FEATURE-ReferencePoints</text>
+
+      <!-- 2022-02-23 SvenBreakingThings · LastSafeBridgeportVersion — x = 220 + 67.77*14.92 = 1231 -->
+      <circle cx="1231" cy="340" r="5" fill="var(--auth-sven)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1231" y="330" class="branch-pill-label" text-anchor="middle">SvenBreakingThings</text>
+      <rect x="1190" y="345" width="82" height="14" fill="#fee2e2" stroke="#b91c1c" stroke-width="1" rx="3"/>
+      <text x="1231" y="355" class="tag-pill-label" text-anchor="middle" fill="#b91c1c" style="font-size:9px">LastSafeBridgeport</text>
+
+      <!-- 2023-02-22 preserve/Gcode — x = 220 + 79.8*14.92 = 1410.6 -->
+      <circle cx="1411" cy="340" r="5" fill="var(--auth-sven)" stroke="var(--gold)" stroke-width="2"/>
+      <text x="1411" y="330" class="branch-pill-label" text-anchor="middle">preserve/Gcode</text>
+
+      <!-- 2023-09-13 preserve/bluetooth — x = 220 + 86.5*14.92 = 1510.6 -->
+      <circle cx="1511" cy="375" r="5" fill="var(--auth-sven)" stroke="var(--gold)" stroke-width="2"/>
+      <text x="1511" y="390" class="branch-pill-label" text-anchor="middle">preserve/bluetooth</text>
+
+      <!-- 2024-09-04 preserve/BDring_GCODE_VIWER — x = 220 + 98.17*14.92 = 1685 -->
+      <circle cx="1685" cy="340" r="4" fill="var(--auth-sven)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1685" y="330" class="branch-pill-label" text-anchor="middle">BDring_GCODE_VIWER</text>
+
+      <!-- 2025-08-06 StairMaster — x = 220 + 109.3*14.92 = 1850.6 -->
+      <circle cx="1851" cy="340" r="7" fill="var(--auth-sean)" stroke="var(--gold)" stroke-width="2"/>
+      <rect x="1808" y="356" width="86" height="16" fill="#fff" stroke="var(--ink-dim)" stroke-width="1" rx="3"/>
+      <text x="1851" y="367" class="branch-pill-label" text-anchor="middle">StairMaster · HEAD</text>
+      <text x="1851" y="326" class="commit-date" text-anchor="middle" font-weight="700">v24.5.1-StairMaster</text>
+
+      <!-- 2025-12-07 BDring_GCODE_VIWER_UPDATED — x = 220 + 113.37*14.92 = 1911.5 -->
+      <circle cx="1912" cy="420" r="4" fill="var(--auth-sean)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1912" y="435" class="branch-pill-label" text-anchor="middle" style="font-size:9px">BDring_UPDATED</text>
+
+      <!-- 2026-01-12 preserve/4.1-modernization — x = 220 + 114.5*14.92 = 1928 -->
+      <circle cx="1928" cy="340" r="6" fill="var(--auth-sean)" stroke="var(--gold)" stroke-width="2"/>
+      <text x="1928" y="326" class="branch-pill-label" text-anchor="end" font-weight="700">4.1-modernization ★</text>
+      <text x="1928" y="314" class="commit-date" text-anchor="end">Telnet + BT + BLE drivers</text>
+
+      <!-- tag 1.0b earlier (2016-01-15) — x = 220 + (-6)*14.92 = 130 (off-chart left) -->
+      <!-- skip, off timeline -->
+
+      <!-- ====================================================== -->
+      <!-- === HARDWARE LANE                                    == -->
+      <!-- ====================================================== -->
+      <line x1="230" y1="530" x2="1990" y2="530" stroke="#65a30d" stroke-width="2" opacity="0.35"/>
+
+      <!-- 2016-08-25 electronics-hardware start — x = 220 + 1.83*14.92 = 247.3 -->
+      <circle cx="247" cy="530" r="4" fill="var(--auth-gab)" stroke="#fff" stroke-width="1.5"/>
+      <!-- 2017-01-15 electronics end — x = 220 + 6.5*14.92 = 317 -->
+      <rect x="247" y="524" width="70" height="12" fill="#65a30d" opacity="0.5" rx="2"/>
+      <text x="282" y="518" class="branch-pill-label" text-anchor="middle" style="font-size:9px">electronics-hardware · 65 commits</text>
+
+      <!-- 2020-10-12 whatbox-hardware start — x = 220 + 51.3*14.92 = 985.3 -->
+      <circle cx="985" cy="530" r="4" fill="var(--auth-bradley)" stroke="#fff" stroke-width="1.5"/>
+      <!-- 2026-01-12 end — x = 220 + 114.5*14.92 = 1928 -->
+      <rect x="985" y="524" width="943" height="12" fill="#65a30d" opacity="0.5" rx="2"/>
+      <text x="1456" y="552" class="branch-pill-label" text-anchor="middle">whatbox-hardware · Controller_v2f + daughter_board_v3 · 40 commits</text>
+
+      <!-- 2026-01-12 daughter_board_v3 HEAD — x = 1928 -->
+      <circle cx="1928" cy="530" r="5" fill="var(--auth-sean)" stroke="#fff" stroke-width="2"/>
+      <text x="1925" y="518" class="branch-pill-label" text-anchor="end">daughter_board_v3 · 2026-01-12</text>
+
+      <!-- ====================================================== -->
+      <!-- === BRIDGE / MCU LANE                                == -->
+      <!-- ====================================================== -->
+      <!-- EspBlueTooth: 2022-06-08 → 2022-12-14 — x₁ = 220 + 71.27*14.92 = 1283.4  x₂ = 220 + 77.4*14.92 = 1374.8 -->
+      <rect x="1283" y="636" width="92" height="10" fill="#6d28d9" opacity="0.55" rx="2"/>
+      <circle cx="1283" cy="641" r="4" fill="var(--auth-bradley)" stroke="#fff" stroke-width="1.5"/>
+      <circle cx="1375" cy="641" r="4" fill="var(--auth-denis)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1329" y="630" class="branch-pill-label" text-anchor="middle">whatbox-espbluetooth</text>
+      <text x="1329" y="660" class="commit-date" text-anchor="middle">ESP32 bridge · 2 commits</text>
+
+      <!-- mcutestapp: 2022-06-08 (Bradley & "Shravan") — x ~ 1283 -->
+      <circle cx="1283" cy="680" r="4" fill="var(--auth-bradley)" stroke="#fff" stroke-width="1.5"/>
+      <text x="1283" y="695" class="branch-pill-label" text-anchor="middle">whatbox-mcutestapp · SAM E70 GPIO test</text>
+
+      <!-- ====================================================== -->
+      <!-- === PAIR/* GOLD CONNECTORS                           == -->
+      <!-- ====================================================== -->
+      <!-- pair/era2-classic: firmware v4.2e (x=1409, y=218) ↔ android preserve/Gcode (x=1411, y=340) -->
+      <path d="M 1409 232 Q 1410 286, 1411 340" stroke="var(--gold)" stroke-width="2" fill="none" stroke-dasharray="6 4"/>
+      <rect x="1335" y="252" width="150" height="20" fill="var(--gold-tint)" stroke="var(--gold)" stroke-width="1.5" rx="3"/>
+      <text x="1410" y="266" class="tag-pill-label" text-anchor="middle" style="font-size:11px">★ pair/era2-classic</text>
+
+      <!-- pair/era3-stairmaster-fluidnc: (no firmware in whatbox) ↔ android StairMaster (x=1851, y=340)
+           Drawn as half-line from "external FluidNC" annotation down to StairMaster -->
+      <path d="M 1851 200 Q 1851 270, 1851 340" stroke="var(--gold)" stroke-width="2" fill="none" stroke-dasharray="6 4" opacity="0.75"/>
+      <rect x="1755" y="212" width="196" height="20" fill="var(--gold-tint)" stroke="var(--gold)" stroke-width="1.5" rx="3"/>
+      <text x="1853" y="226" class="tag-pill-label" text-anchor="middle" style="font-size:11px">★ pair/era3-stairmaster-fluidnc</text>
+      <text x="1853" y="244" class="commit-date" text-anchor="middle">firmware = external FluidNC (not in whatbox)</text>
+
+      <!-- pair/mc-refactor-candidate: firmware mc-refactor (x=1018, y=200) ↔ android preserve/bluetooth (x=1511, y=375) -->
+      <path d="M 1018 208 Q 1200 290, 1511 375" stroke="var(--gold)" stroke-width="2" fill="none" stroke-dasharray="6 4"/>
+      <rect x="1190" y="275" width="176" height="20" fill="var(--gold-tint)" stroke="var(--gold)" stroke-width="1.5" rx="3"/>
+      <text x="1278" y="289" class="tag-pill-label" text-anchor="middle" style="font-size:11px">★ pair/mc-refactor-candidate</text>
+      <text x="1278" y="307" class="commit-date" text-anchor="middle" fill="#b91c1c">NOT VERIFIED · needs ~20 eng-days</text>
+
+      <!-- ==== EXTERNAL FluidNC floating marker in firmware lane at 2022+ ==== -->
+      <rect x="1470" y="76" width="460" height="20" fill="var(--plum-tint, #fae8ff)" stroke="#86198f" stroke-width="1" stroke-dasharray="4 3" rx="3"/>
+      <text x="1700" y="90" class="branch-pill-label" text-anchor="middle" fill="#86198f">external FluidNC (ESP32 · not in any whatbox repo)</text>
+    </svg>
+  </div>
+
+  <!-- ========== LEGEND ========== -->
+  <div class="legend-grid">
+    <div class="legend">
+      <h3>Dot colour = author</h3>
+      <div class="legend-row">
+        <span><span class="sw-dot" style="background:var(--auth-shravan)"></span>Shravan Lal</span>
+        <span><span class="sw-dot" style="background:var(--auth-bradley)"></span>Bradley King</span>
+        <span><span class="sw-dot" style="background:var(--auth-denis)"></span>Denis Raison</span>
+        <span><span class="sw-dot" style="background:var(--auth-sven)"></span>Sven Tiede</span>
+        <span><span class="sw-dot" style="background:var(--auth-sean)"></span>Sean McGrade</span>
+        <span><span class="sw-dot" style="background:var(--auth-maikel)"></span>Maikel</span>
+        <span><span class="sw-dot" style="background:var(--auth-eden)"></span>Eden Barby</span>
+        <span><span class="sw-dot" style="background:var(--auth-a0)"></span>A0 agent (lab)</span>
+        <span><span class="sw-dot" style="background:var(--auth-gab)"></span>Earlier (Gab/others)</span>
+      </div>
+    </div>
+    <div class="legend">
+      <h3>Badge &amp; line key</h3>
+      <div class="legend-row">
+        <span><span class="sw-pill" style="color:var(--ink);background:#fff">branch head</span></span>
+        <span><span class="sw-pill" style="color:var(--gold);background:var(--gold-tint)">★ pair/*</span>tag</span>
+        <span><span class="sw-pill" style="color:#b91c1c;background:#fee2e2">⚠ breaking</span>tag</span>
+        <span><svg width="42" height="12" style="vertical-align:middle"><path d="M2 6 Q 20 0, 40 6" stroke="var(--gold)" stroke-width="2" fill="none" stroke-dasharray="5 3"/></svg>pair connection across lanes</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== PAIR CARDS ========== -->
+  <div class="pair-grid">
+
+    <div class="pair-card verified">
+      <div class="pair-card__head">
+        <span class="pair-name">pair/era2-classic</span>
+        <span class="pair-status ok">Verified</span>
+      </div>
+      <table>
+        <tr><td class="k">Firmware</td><td class="v">v4.1 @ tag <code>v4.2e</code></td></tr>
+        <tr><td class="k">Android</td><td class="v">branch <code>preserve/Gcode</code> (2023-02-22)</td></tr>
+        <tr><td class="k">Transport</td><td class="v">BT Classic SPP · 115200 baud</td></tr>
+        <tr><td class="k">MCU</td><td class="v">ATSAMS70Q20 · ARM Cortex-M7</td></tr>
+        <tr><td class="k">PID</td><td class="v">inline position-only · Kp={2,2,0.9} Ki={1,1,0.5}</td></tr>
+        <tr><td class="k">Packets</td><td class="v">17 firmware ↔ 23 Android (superset)</td></tr>
+        <tr><td class="k">Use</td><td class="v">Daily-use recommended pair</td></tr>
+      </table>
+    </div>
+
+    <div class="pair-card verified">
+      <div class="pair-card__head">
+        <span class="pair-name">pair/era3-stairmaster-fluidnc</span>
+        <span class="pair-status ok">Verified</span>
+      </div>
+      <table>
+        <tr><td class="k">Firmware</td><td class="v">external FluidNC · ESP32 · not in whatbox repos</td></tr>
+        <tr><td class="k">Android</td><td class="v">branch <code>StairMaster</code> · v24.5.1-StairMaster</td></tr>
+        <tr><td class="k">Transport</td><td class="v">BT Classic + FluidNC GCode stream</td></tr>
+        <tr><td class="k">Configs</td><td class="v">cncEST.yaml · CamelCNC.yaml (in app assets)</td></tr>
+        <tr><td class="k">PID</td><td class="v">FluidNC built-in (GRBL-derived)</td></tr>
+        <tr><td class="k">Hardware</td><td class="v">daughter_board_v3 · ESP32-WROOM-32 + SAM E70</td></tr>
+        <tr><td class="k">Use</td><td class="v">Current production pair (2025-08)</td></tr>
+      </table>
+    </div>
+
+    <div class="pair-card wip">
+      <div class="pair-card__head">
+        <span class="pair-name">pair/mc-refactor-candidate</span>
+        <span class="pair-status wip">Not verified</span>
+      </div>
+      <table>
+        <tr><td class="k">Firmware</td><td class="v">branch <code>origin/mc-refactor</code> @ <code>7ed6058</code></td></tr>
+        <tr><td class="k">Author</td><td class="v">Shravan Lal · 40 exclusive commits · Dec 2020</td></tr>
+        <tr><td class="k">Android</td><td class="v">branch <code>preserve/bluetooth</code> (2023-09-13)</td></tr>
+        <tr><td class="k">Transport</td><td class="v">BT Classic SPP · 115200 baud</td></tr>
+        <tr><td class="k">PID</td><td class="v"><strong>cascaded dual-loop</strong> · per-axis feed-forward · first-tick suppression · dt-scaled integrator</td></tr>
+        <tr><td class="k">Last HW</td><td class="v">2020-10-21 · nothing since</td></tr>
+        <tr><td class="k">Finish</td><td class="v"><strong>18–27 engineer-days</strong> (see SCOPING.md)</td></tr>
+        <tr><td class="k">Blockers</td><td class="v">PID never wired to motors · homing &amp; probing absent · no EEPROM/comms</td></tr>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ========== REFS ========== -->
+  <div class="refs">
+    <h3>Where the detail lives</h3>
+    <ul>
+      <li><code>PAIRINGS.md</code> — master record, one tabular row per pair, SHAs &amp; dates. In this repo.</li>
+      <li><code>PROTOCOL.md</code> — the three protocol eras, packet type sets per branch, header <code>0x44</code> gotchas, v4.1d breaking change. In this repo.</li>
+      <li><code>PID.md</code> — standard inline PID (master) vs Shravan's cascaded refactor, algorithm listings, EEPROM addresses. In this repo.</li>
+      <li>Scoping memory — <code>~/.claude/projects/&hellip;/project_mc_refactor_scoping.md</code> — 18–27 engineer-day breakdown to finish mc-refactor, three highest-risk items.</li>
+      <li>Shravan identity memory — <code>~/.claude/projects/&hellip;/feedback_shravan_branch.md</code> — Bradley &lt;Shravan Lal&gt; identity bug vs real Shravan Lal &lt;Shravan Lal&gt; commits.</li>
+      <li>Earlier visual — <code>whatbox-v41-android-pairing.html</code> (Documents folder) — matrix-style Android × firmware compatibility.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>
