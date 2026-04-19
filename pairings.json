@@ -1,0 +1,225 @@
+{
+  "schema_version": "1.0",
+  "last_updated": "2026-04-20",
+  "description": "Machine-readable manifest of verified WhatBox firmware + Android + transport + hardware combinations. Any AI working on WhatBox should read this file BEFORE recommending a version pairing. Human-readable companion: PAIRINGS.md, DECISION_GUIDE.md.",
+  "identity_notes": {
+    "shravan_lal_real": "commits authored by 'Shravan Lal <Shravan Lal>' (both fields equal 'Shravan Lal'). 99 commits on whatbox-cnc-firmware-v4.1; 40 exclusive to origin/mc-refactor. Real developer, authored the gold PID.",
+    "shravan_lal_bug": "commits authored by 'Bradley King <Shravan Lal>' (name=Bradley King, email=literal 'Shravan Lal'). Identity misconfiguration on Bradley's dev machine. NOT Shravan's work."
+  },
+  "pairs": [
+    {
+      "name": "pair/era2-classic",
+      "status": "verified",
+      "verified_date": "2024",
+      "verified_context": "Bridgeport mill, full feature set",
+      "recommended_use": "Daily operation",
+      "firmware": {
+        "repo": "whatbox-cnc-firmware-v4.1",
+        "remote": "https://bitbucket.org/whatboxcnc/cnc-firmware-v4.1",
+        "ref_type": "tag",
+        "ref_name": "v4.2e",
+        "sha": "786cf919ba84ddbe5dc7bf5107dbd529eda680ef",
+        "mcu": "ATSAMS70Q20",
+        "mcu_family": "ARM Cortex-M7",
+        "flash_kb": 1024,
+        "sram_kb": 384,
+        "crystal_hz": 16000000,
+        "eeprom": "external AT24CXX via I2C",
+        "pid_architecture": "inline_position_only",
+        "pid_gains": { "kp": [2.0, 2.0, 0.9], "ki": [1.0, 1.0, 0.5], "kd": [0.0, 0.0, 0.0] },
+        "packet_type_count": 17,
+        "packet_types": ["A", "B", "E", "L", "M", "P", "R", "S", "T", "U", "W", "V", "Z", "K", "I", "N", "F"]
+      },
+      "android": {
+        "repo": "whatbox-android-remote-control",
+        "remote": "https://github.com/sean-mcgrade/whatbox-android-remote-control",
+        "ref_type": "branch",
+        "ref_name": "preserve/Gcode",
+        "sha": "0431fc14d0b3c309610e335bc629ffdc548bfe8e",
+        "date": "2023-02-22",
+        "version_name": "0.0.13-b1",
+        "packet_type_count": 23,
+        "transport_drivers": ["BlConnectService.java"]
+      },
+      "transport": {
+        "primary": "bluetooth_classic_spp",
+        "baud": 115200,
+        "spp_uuid": "00001101-0000-1000-8000-00805F9B34FB",
+        "ble": false,
+        "wifi": false,
+        "telnet": false
+      },
+      "bluetooth_hardware": {
+        "module": "Microchip RN4020",
+        "profile": "classic_bluetooth_spp",
+        "notes": "Bluetooth 4.0 LE-capable chip used in classic-SPP mode"
+      },
+      "pcb": {
+        "repo": "whatbox-electronics-hardware (legacy 2016-2017) and whatbox-hardware (2020-present)",
+        "main_board": "motherBoard v2f / Controller_v2f",
+        "daughter_board": "daughterBoard v2 (SAM E70, ELECROW 4-layer, 2017-01-14)"
+      }
+    },
+    {
+      "name": "pair/era3-stairmaster-fluidnc",
+      "status": "verified",
+      "verified_date": "2025-08",
+      "verified_context": "Sean's current kit (Stairmaster product)",
+      "recommended_use": "Current production — use this for Stairmaster-over-Bluetooth",
+      "firmware": {
+        "repo": null,
+        "remote": null,
+        "ref_type": "external",
+        "ref_name": "FluidNC (open-source GRBL fork)",
+        "sha": null,
+        "mcu": "ESP32-WROOM-32",
+        "mcu_family": "ESP32 Xtensa LX6 + SAM E70 co-processor",
+        "pid_architecture": "grbl_step_generator (not a servo PID)",
+        "stepping_engine": "I2S_STREAM",
+        "notes": "FluidNC is NOT in any whatbox repo. Configured via YAML files shipped in the Android app's assets folder."
+      },
+      "fluidnc_configs": [
+        { "name": "cncEST.yaml", "board": "6x" },
+        { "name": "CamelCNC.yaml", "board": "6 Pack" }
+      ],
+      "android": {
+        "repo": "whatbox-android-remote-control",
+        "remote": "https://github.com/sean-mcgrade/whatbox-android-remote-control",
+        "ref_type": "branch",
+        "ref_name": "StairMaster",
+        "sha": "1d81f86389b3922d84d95f687686181de14f8231",
+        "date": "2025-08-06",
+        "version_name": "24.5.1-StairMaster",
+        "version_code": 300240501,
+        "packet_type_count": 23,
+        "transport_drivers": ["BlConnectService.java", "CommandGCode.java", "GCodeConverter.java"]
+      },
+      "transport": {
+        "primary": "bluetooth_classic_with_gcode_stream",
+        "baud": "n/a (GCode line-stream, not fixed-size packets)",
+        "spp_uuid": "00001101-0000-1000-8000-00805F9B34FB",
+        "ble": true,
+        "ble_profile": "UBLOX/Microchip MLDP",
+        "ble_service_uuid": "2456e1b9-26e2-8f83-e744-f34f01e9d701",
+        "ble_data_char_uuid": "2456e1b9-26e2-8f83-e744-f34f01e9d703",
+        "fluidnc_status_poll_char": "?",
+        "fluidnc_status_poll_interval_ms": 250,
+        "wifi": false,
+        "telnet": false
+      },
+      "bluetooth_hardware": {
+        "module": "ESP32-WROOM-32 built-in",
+        "profile": "classic_bluetooth_spp + BLE MLDP fallback",
+        "notes": "ESP32 runs FluidNC; both BT modes exposed. Android drives classic SPP primarily."
+      },
+      "pcb": {
+        "repo": "whatbox-hardware",
+        "remote": "https://github.com/sean-mcgrade/whatbox-hardware",
+        "main_board": "Controller_v2f (KiCad-converted 2024-12)",
+        "daughter_board": "daughter_board_v3 (ESP32-WROOM-32 + SAM E70 + supercap UPS + cellular modem, last updated 2026-01-12)"
+      }
+    },
+    {
+      "name": "pair/mc-refactor-candidate",
+      "status": "not_verified",
+      "warning": "PID never wired to motors; homing and probing absent; no EEPROM persistence; no comms layer. ~18-27 engineer-days to finish. DO NOT SHIP.",
+      "recommended_use": "Reference only — study Shravan's cascaded PID architecture",
+      "firmware": {
+        "repo": "whatbox-cnc-firmware-v4.1",
+        "remote": "https://bitbucket.org/whatboxcnc/cnc-firmware-v4.1",
+        "ref_type": "branch",
+        "ref_name": "origin/mc-refactor",
+        "sha": "7ed6058",
+        "date": "2020-12-16",
+        "author": "Shravan Lal <Shravan Lal>",
+        "exclusive_commits": 40,
+        "mcu": "ATSAMS70Q20",
+        "mcu_family": "ARM Cortex-M7",
+        "pid_architecture": "cascaded_dual_loop_with_feedforward",
+        "pid_features": [
+          "position_loop_drives_velocity_reference",
+          "velocity_loop_drives_motor_duty",
+          "per_axis_feedforward_coefficient",
+          "first_tick_derivative_suppression",
+          "time_scaled_integration_dt_robust"
+        ],
+        "module_files": [
+          "src/refactor/pid.c",
+          "src/refactor/pid.h",
+          "src/refactor/follower.c",
+          "src/refactor/follower.h",
+          "src/refactor/positioner.c",
+          "src/refactor/positioner.h",
+          "src/refactor/movement.c",
+          "src/refactor/movement.h",
+          "src/refactor/preloader.c",
+          "src/refactor/preloader.h",
+          "src/refactor/math_util.c",
+          "src/refactor/math_util.h",
+          "src/refactor/parser.c",
+          "src/refactor/parser.h",
+          "src/refactor/generic_cmd.c",
+          "src/refactor/generic_cmd.h",
+          "src/refactor/protocol.h"
+        ],
+        "wip_markers": [
+          "7d28ac3 Unfinished implementation of cascaded PID control for 'follower'",
+          "8e16931 wip 20201210",
+          "f604db9 wip trash",
+          "771bb9e untested integration into main.c",
+          "cdd1e03 Hacked refactored code into main loop, removed movement tests",
+          "follower.h is 0 bytes (empty blob e69de29)"
+        ],
+        "last_hardware_test": "2020-10-21",
+        "packet_type_count": 17
+      },
+      "android": {
+        "repo": "whatbox-android-remote-control",
+        "remote": "https://github.com/sean-mcgrade/whatbox-android-remote-control",
+        "ref_type": "branch",
+        "ref_name": "preserve/bluetooth",
+        "sha": "947c11f141793e12d4fcbe505dad72c0452139cb",
+        "date": "2023-09-13",
+        "version_name": "0.0.13-b1",
+        "packet_type_count": 23
+      },
+      "transport": {
+        "primary": "bluetooth_classic_spp",
+        "baud": 115200,
+        "spp_uuid": "00001101-0000-1000-8000-00805F9B34FB",
+        "ble": false
+      },
+      "bluetooth_hardware": {
+        "module": "Microchip RN4020",
+        "profile": "classic_bluetooth_spp"
+      },
+      "pcb": {
+        "repo": "whatbox-electronics-hardware",
+        "main_board": "Controller_v2f",
+        "daughter_board": "daughterBoard v2 (SAM E70)"
+      },
+      "effort_to_ship": {
+        "estimate_engineer_days_low": 18,
+        "estimate_engineer_days_realistic": 27,
+        "estimate_engineer_days_pessimistic": 35,
+        "top_risk_items": [
+          "PID follower never wired to motors (2-3d code + 3-5d scope tuning)",
+          "Homing + probing entirely absent (4-6d combined, safety-critical)",
+          "EEPROM + comms layer missing (4-5d, blocks all end-to-end testing)"
+        ],
+        "integration_hazard": "main.c calls BOTH legacy positionController() AND refactor positioner__doMovementTick() on every iteration — dual code paths, silent divergence risk"
+      }
+    }
+  ],
+  "repos_index": {
+    "whatbox-cnc-firmware-v2.0": { "purpose": "era 1 firmware — xmega 8-bit, 38400 baud, numeric packet types", "remote": "https://github.com/sean-mcgrade/whatbox-cnc-firmware-v2.0", "status": "archival" },
+    "whatbox-cnc-firmware-v4.0": { "purpose": "era 2 firmware — SAM E70 initial port 2017-01, ASCII packet types", "remote": "https://github.com/sean-mcgrade/whatbox-cnc-firmware-v4.0", "status": "archival (17 commits, 1-month sprint only)" },
+    "whatbox-cnc-firmware-v4.1": { "purpose": "current firmware repo — 29 branches, 12 tags, mc-refactor is the gold-PID branch", "remote": "https://bitbucket.org/whatboxcnc/cnc-firmware-v4.1", "status": "active" },
+    "whatbox-android-remote-control": { "purpose": "Android app driving the CNC over Bluetooth (classic SPP / BLE / Telnet)", "remote": "https://github.com/sean-mcgrade/whatbox-android-remote-control", "status": "active" },
+    "whatbox-hardware": { "purpose": "current PCB designs — Controller_v2f + daughter_board_v3 (KiCad)", "remote": "https://github.com/sean-mcgrade/whatbox-hardware", "status": "active" },
+    "whatbox-electronics-hardware": { "purpose": "legacy PCB designs — 2016-2017 era (Eagle/KiCad)", "remote": "https://github.com/sean-mcgrade/whatbox-electronics-hardware", "status": "archival" },
+    "whatbox-espbluetooth": { "purpose": "ESP32 Bluetooth bridge (bridges WiFi/Telnet to SAM E70 firmware)", "remote": "https://bitbucket.org/whatboxcnc/espbluetooth", "status": "experimental (single commit)" },
+    "whatbox-mcutestapp": { "purpose": "bench-test GPIO validator for SAM E70 (not runtime)", "remote": "https://github.com/sean-mcgrade/whatbox-mcutestapp", "status": "archival" },
+    "whatbox-pairings": { "purpose": "THIS REPO — pairing manifest, decision guide, JSON, cross-repo visual", "remote": "https://github.com/sean-mcgrade/whatbox-pairings", "status": "active — source of truth for AI sessions" }
+  }
+}
